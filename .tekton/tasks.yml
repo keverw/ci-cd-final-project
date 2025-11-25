@@ -1,65 +1,44 @@
-###############################################################
-# CLEANUP TASK
-# This task wipes the workspace clean before running pipeline steps.
-# It uses UBI Minimal because Alpine triggers OpenShift PodSecurity
-# violations (restricted SCC forbids capabilities Alpine uses).
-###############################################################
 ---
 apiVersion: tekton.dev/v1beta1
 kind: Task
 metadata:
   name: cleanup
 spec:
-  description: >
-    This task cleans the output workspace by deleting all files safely.
+  description: Clean workspace safely
   workspaces:
-    - name: source   # pipeline workspace it will clean
-
-  podTemplate:
-    securityContext:
-      runAsNonRoot: true
-      seccompProfile:
-        type: RuntimeDefault
-      fsGroup: 65532     # ensures nonroot write access    
+    - name: source
 
   steps:
     - name: remove
-      # Use UBI minimal image (OpenShift-recommended, restricted-safe)
       image: registry.access.redhat.com/ubi8/ubi-minimal
       workingDir: $(workspaces.source.path)
 
+      securityContext:
+        runAsNonRoot: true
+        capabilities:
+          drop:
+            - ALL
+        seccompProfile:
+          type: RuntimeDefault
+
       env:
-        # Path to workspace
         - name: WORKSPACE_SOURCE_PATH
           value: $(workspaces.source.path)
 
       script: |
         #!/usr/bin/env sh
         set -eu
-
         echo "Cleaning workspace: ${WORKSPACE_SOURCE_PATH}"
 
-        # Only clean if directory exists
         if [ -d "${WORKSPACE_SOURCE_PATH}" ]; then
-
-          echo "Removing normal files..."
           rm -rf "${WORKSPACE_SOURCE_PATH:?}/"*
-
-          echo "Removing hidden files (except ..)..."
           rm -rf "${WORKSPACE_SOURCE_PATH}/."[!.]?*
-
-          echo "Removing '..*' hidden files..."
           rm -rf "${WORKSPACE_SOURCE_PATH}/"..?*
-
         else
-          echo "Workspace does not exist yet. Nothing to clean."
+          echo "Nothing to clean."
         fi
 
 
-###############################################################
-# NOSE TEST TASK
-# Runs Python Nose unit tests with pip, requirements, and args.
-###############################################################
 ---
 apiVersion: tekton.dev/v1beta1
 kind: Task
@@ -67,28 +46,29 @@ metadata:
   name: nose
 spec:
   workspaces:
-    - name: source  # directory that contains requirements + tests
+    - name: source
 
   params:
     - name: args
-      description: Nose test arguments
       type: string
       default: "-v"
 
   steps:
     - name: nosetests
-      image: python:3.9-slim      # lightweight Python, works in sandbox
+      image: python:3.9-slim
       workingDir: $(workspaces.source.path)
+
+      securityContext:
+        runAsNonRoot: true
+        capabilities:
+          drop:
+            - ALL
+        seccompProfile:
+          type: RuntimeDefault
 
       script: |
         #!/bin/bash
         set -e
-
-        echo "Upgrading pip + wheel..."
         python -m pip install --upgrade pip wheel
-
-        echo "Installing dependencies..."
         pip install -r requirements.txt
-
-        echo "Running nose tests..."
         nosetests $(params.args)
