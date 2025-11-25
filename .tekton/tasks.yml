@@ -72,39 +72,3 @@ spec:
         python -m pip install --upgrade pip wheel
         pip install -r requirements.txt
         nosetests $(params.args)
----
-apiVersion: tekton.dev/v1beta1
-kind: Task
-metadata:
-  name: git-clone
-spec:
-  workspaces:
-    - name: output
-  params:
-    - name: url
-      type: string
-    - name: revision
-      type: string
-      default: "main"
-
-  steps:
-    - name: clone
-      image: registry.redhat.io/openshift/tools:latest
-      workingDir: $(workspaces.output.path)
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1001
-        capabilities:
-          drop: ["ALL"]
-        seccompProfile:
-          type: RuntimeDefault
-      script: |
-        #!/usr/bin/env sh
-        set -eux
-
-        if [ -d "$(workspaces.output.path)/.git" ]; then
-          rm -rf $(workspaces.output.path)/.git
-        fi
-
-        git clone $(params.url) .
-        git checkout $(params.revision)
