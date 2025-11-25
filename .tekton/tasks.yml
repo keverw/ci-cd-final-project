@@ -14,7 +14,6 @@ spec:
         - name: WORKSPACE_SOURCE_PATH
           value: $(workspaces.source.path)
       workingDir: $(workspaces.source.path)
-      securityContext:
         securityContext:
         runAsNonRoot: true
         runAsUser: 1000
