@@ -72,3 +72,43 @@ spec:
         python -m pip install --upgrade pip wheel
         pip install -r requirements.txt
         nosetests $(params.args)
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: clone
+spec:
+  description: Safe Git clone for OpenShift restricted SCC.
+  workspaces:
+    - name: source
+
+  params:
+    - name: repo-url
+      type: string
+    - name: revision
+      type: string
+      default: "main"
+
+  steps:
+    - name: clone
+      image: registry.access.redhat.com/ubi8/ubi-minimal
+      workingDir: $(workspaces.source.path)
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        seccompProfile:
+          type: RuntimeDefault
+
+      script: |
+        #!/usr/bin/env sh
+        set -eux
+
+        microdnf install -y git
+
+        echo "Cloning $(params.repo-url) ..."
+        git clone "$(params.repo-url)" repo
+
+        cd repo
+        git checkout "$(params.revision)"
+
+        echo "Clone complete!"
