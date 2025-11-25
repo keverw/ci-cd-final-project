@@ -76,14 +76,12 @@ spec:
 apiVersion: tekton.dev/v1beta1
 kind: Task
 metadata:
-  name: clone
+  name: git-clone
 spec:
-  description: Safe Git clone for OpenShift restricted SCC.
   workspaces:
-    - name: source
-
+    - name: output
   params:
-    - name: repo-url
+    - name: url
       type: string
     - name: revision
       type: string
@@ -91,24 +89,22 @@ spec:
 
   steps:
     - name: clone
-      image: registry.access.redhat.com/ubi8/ubi-minimal
-      workingDir: $(workspaces.source.path)
+      image: registry.redhat.io/openshift/tools:latest
+      workingDir: $(workspaces.output.path)
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001
+        capabilities:
+          drop: ["ALL"]
         seccompProfile:
           type: RuntimeDefault
-
       script: |
         #!/usr/bin/env sh
         set -eux
 
-        microdnf install -y git
+        if [ -d "$(workspaces.output.path)/.git" ]; then
+          rm -rf $(workspaces.output.path)/.git
+        fi
 
-        echo "Cloning $(params.repo-url) ..."
-        git clone "$(params.repo-url)" repo
-
-        cd repo
-        git checkout "$(params.revision)"
-
-        echo "Clone complete!"
+        git clone $(params.url) .
+        git checkout $(params.revision)
